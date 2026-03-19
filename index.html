@@ -149,6 +149,105 @@
     .panel { background:var(--panel); border:1px solid var(--border); border-radius:3px; padding:14px 16px; margin-bottom:8px; }
     .panel-title { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-bottom:12px; }
 
+    /* ── Schläge ── */
+    #schlaege-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #schlaege-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .schlaege-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      white-space: nowrap;
+    }
+    #schlag-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .schlag-chip {
+      background: rgba(52,211,153,.08);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 3px 8px 3px 10px;
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: border-color .1s, color .1s;
+    }
+    .schlag-chip:hover { border-color: var(--green); color: var(--green); }
+    .chip-del {
+      font-size: 13px;
+      line-height: 1;
+      color: var(--muted);
+      opacity: .6;
+      cursor: pointer;
+      padding: 0 1px;
+    }
+    .chip-del:hover { opacity: 1; color: var(--red); }
+    #schlag-add-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 3px 10px;
+      cursor: pointer;
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: auto;
+      white-space: nowrap;
+    }
+    #schlag-add-btn:hover { border-color: var(--green); color: var(--green); }
+    #schlag-form {
+      display: none;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 8px 10px;
+      background: rgba(0,0,0,.08);
+      border-radius: 3px;
+    }
+    #schlag-form input {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 5px 8px;
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+    }
+    #schlag-form input:focus { border-color: var(--teal); }
+    #schlag-name-in { flex: 2 1 120px; }
+    #schlag-lat-in  { flex: 1 1 90px; }
+    #schlag-lon-in  { flex: 1 1 90px; }
+    .schlag-form-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    #schlag-gps-btn  { border-color: var(--teal); color: var(--teal); }
+    #schlag-save-btn { border-color: var(--green); color: var(--green); }
+    #schlag-save-btn:hover { background: rgba(52,211,153,.12); }
+    #schlag-gps-btn:hover  { background: rgba(0,212,255,.12); }
+
     /* ── Calendar ── */
     #cal-head { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
     #cal-range { font-size:11px; color:var(--teal); margin-top:3px; }
@@ -187,11 +286,14 @@
       background: rgba(0,212,255,.08);
       border: 1px solid var(--border);
       border-radius: 3px;
-      padding: 3px 10px;
+      padding: 3px 8px 3px 10px;
       cursor: pointer;
       font-size: 11px;
       color: var(--muted);
       white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       transition: border-color .1s, color .1s;
     }
     .fav-chip:hover { border-color: var(--teal); color: var(--teal); }
@@ -401,6 +503,23 @@
     </div>
   </div>
 
+  <!-- Schläge -->
+  <div id="schlaege-wrap">
+    <div id="schlaege-top">
+      <span class="schlaege-label">🌾 Schläge</span>
+      <div id="schlag-chips"></div>
+      <button id="schlag-add-btn">+ Standort hinzufügen</button>
+    </div>
+    <div id="schlag-form">
+      <input id="schlag-name-in" type="text" placeholder="Name des Schlags"/>
+      <input id="schlag-lat-in"  type="number" step="0.0001" placeholder="Breitengrad"/>
+      <input id="schlag-lon-in"  type="number" step="0.0001" placeholder="Längengrad"/>
+      <button class="schlag-form-btn" id="schlag-gps-btn">📍 GPS</button>
+      <button class="schlag-form-btn" id="schlag-save-btn">✓ Speichern</button>
+      <button class="schlag-form-btn" id="schlag-cancel-btn" style="color:var(--muted)">✕</button>
+    </div>
+  </div>
+
   <!-- Calendar -->
   <div class="panel">
     <div id="cal-head">
@@ -605,7 +724,7 @@ function updateTiles() {
   if (ti>=0 && data.daily.sunrise?.[ti]) {
     const rise = data.daily.sunrise[ti].slice(11,16);
     const set_ = data.daily.sunset[ti].slice(11,16);
-    html('t-sun', `🌅 ${rise}<br>🌇 ${set_}`);
+    html('t-sun', `▲ ${rise}<br>▼ ${set_}`);
   } else { html('t-sun', '—'); }
 
   // Agrar
@@ -1004,21 +1123,28 @@ function renderFavs() {
   getFavs().forEach(f => {
     const chip = document.createElement('button');
     chip.className = 'fav-chip';
-    chip.textContent = f.name;
-    chip.addEventListener('click', () => {
-      loc = f;
-      cityIn.value  = f.name;
-      $('loc-info').textContent = f.name;
+    chip.title = 'Klick: laden';
+
+    const label = document.createElement('span');
+    label.textContent = f.name;
+    label.addEventListener('click', () => {
+      loc = { name: f.name, lat: f.lat, lon: f.lon };
+      cityIn.value = f.name;
       loadWeather(loadedPastDays);
     });
-    // Rechtsklick zum Entfernen
-    chip.title = 'Klick: laden · Rechtsklick: entfernen';
-    chip.addEventListener('contextmenu', e => {
-      e.preventDefault();
-      const favs = getFavs().filter(x => !(x.name === f.name && x.lat === f.lat));
-      saveFavs(favs);
+
+    const del = document.createElement('span');
+    del.className = 'chip-del';
+    del.textContent = '×';
+    del.title = 'Entfernen';
+    del.addEventListener('click', e => {
+      e.stopPropagation();
+      saveFavs(getFavs().filter(x => !(x.lat === f.lat && x.lon === f.lon)));
       renderFavs();
     });
+
+    chip.appendChild(label);
+    chip.appendChild(del);
     chips.appendChild(chip);
   });
 }
@@ -1035,6 +1161,93 @@ $('fav-save').addEventListener('click', () => {
 });
 
 renderFavs();
+
+// ── Schläge ───────────────────────────────────────────────────────────────────
+function getSchlaege()       { try { return JSON.parse(localStorage.getItem('schlaege') || '[]'); } catch { return []; } }
+function saveSchlaege(list)  { localStorage.setItem('schlaege', JSON.stringify(list)); }
+
+function renderSchlaege() {
+  const chips = $('schlag-chips');
+  chips.innerHTML = '';
+  getSchlaege().forEach(s => {
+    const chip = document.createElement('button');
+    chip.className = 'schlag-chip';
+    chip.title = `${s.lat}, ${s.lon}`;
+
+    const label = document.createElement('span');
+    label.textContent = s.name;
+    label.addEventListener('click', () => {
+      loc = { name: s.name, lat: s.lat, lon: s.lon };
+      cityIn.value = s.name;
+      loadWeather(loadedPastDays);
+    });
+
+    const del = document.createElement('span');
+    del.className = 'chip-del';
+    del.textContent = '×';
+    del.title = 'Entfernen';
+    del.addEventListener('click', e => {
+      e.stopPropagation();
+      saveSchlaege(getSchlaege().filter(x => !(x.lat === s.lat && x.lon === s.lon)));
+      renderSchlaege();
+    });
+
+    chip.appendChild(label);
+    chip.appendChild(del);
+    chips.appendChild(chip);
+  });
+}
+
+// Formular anzeigen/ausblenden
+$('schlag-add-btn').addEventListener('click', () => {
+  const form = $('schlag-form');
+  form.style.display = form.style.display === 'flex' ? 'none' : 'flex';
+  $('schlag-name-in').focus();
+});
+$('schlag-cancel-btn').addEventListener('click', () => {
+  $('schlag-form').style.display = 'none';
+  $('schlag-name-in').value = '';
+  $('schlag-lat-in').value  = '';
+  $('schlag-lon-in').value  = '';
+});
+
+// GPS-Button
+$('schlag-gps-btn').addEventListener('click', () => {
+  if (!navigator.geolocation) { alert('GPS nicht verfügbar'); return; }
+  $('schlag-gps-btn').textContent = '⏳';
+  navigator.geolocation.getCurrentPosition(pos => {
+    $('schlag-lat-in').value = pos.coords.latitude.toFixed(5);
+    $('schlag-lon-in').value = pos.coords.longitude.toFixed(5);
+    $('schlag-gps-btn').textContent = '📍 GPS';
+    if (!$('schlag-name-in').value) $('schlag-name-in').focus();
+  }, () => {
+    $('schlag-gps-btn').textContent = '📍 GPS';
+    alert('GPS-Zugriff verweigert oder nicht möglich.');
+  });
+});
+
+// Speichern
+$('schlag-save-btn').addEventListener('click', () => {
+  const name = $('schlag-name-in').value.trim();
+  const lat  = parseFloat($('schlag-lat-in').value);
+  const lon  = parseFloat($('schlag-lon-in').value);
+  if (!name || isNaN(lat) || isNaN(lon)) {
+    alert('Bitte Name, Breitengrad und Längengrad angeben.');
+    return;
+  }
+  const list = getSchlaege();
+  if (!list.find(s => s.lat === lat && s.lon === lon)) {
+    list.push({ name, lat, lon });
+    saveSchlaege(list);
+    renderSchlaege();
+  }
+  $('schlag-form').style.display = 'none';
+  $('schlag-name-in').value = '';
+  $('schlag-lat-in').value  = '';
+  $('schlag-lon-in').value  = '';
+});
+
+renderSchlaege();
 
 // ── Auto-Refresh (alle 30 min) ────────────────────────────────────────────────
 let autoRefreshTimer = null;
