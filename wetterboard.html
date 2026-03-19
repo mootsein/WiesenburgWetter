@@ -27,6 +27,18 @@
       --red:    #ef4444;
       --purple: #a78bfa;
       --teal:   #00d4ff;
+      --input-bg: #23262e;
+      --tooltip-bg: #23262e;
+    }
+
+    body.light {
+      --bg:       #f0f4f8;
+      --panel:    #ffffff;
+      --border:   #dde3ec;
+      --text:     #1e2533;
+      --muted:    #5a6a82;
+      --input-bg: #edf0f5;
+      --tooltip-bg: #ffffff;
     }
 
     body {
@@ -55,7 +67,7 @@
     #city-wrap { position: relative; flex: 1 1 220px; max-width: 340px; }
     #city-input {
       width: 100%;
-      background: #23262e;
+      background: var(--input-bg);
       border: 1px solid var(--border);
       border-radius: 3px;
       padding: 5px 10px;
@@ -69,7 +81,7 @@
       display: none;
       position: absolute;
       top: 100%; left: 0; right: 0;
-      background: #23262e;
+      background: var(--input-bg);
       border: 1px solid var(--border);
       border-radius: 3px;
       margin-top: 2px;
@@ -157,100 +169,19 @@
     }
     #cal-reset:hover { background: rgba(0,212,255,.22); }
 
-    #share-btn {
-      background: rgba(37,211,102,.12);
-      border: 1px solid #25d366;
-      color: #25d366;
-      padding: 8px 22px;
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 15px;
-      font-weight: 700;
-      letter-spacing: .3px;
-      white-space: nowrap;
-    }
-    #share-btn:hover { background: rgba(37,211,102,.22); }
-
-    /* Share modal */
-    #share-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.65);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-    }
-    #share-modal {
-      background: #1a1d27;
-      border: 1px solid #25d366;
-      border-radius: 6px;
-      padding: 22px 24px;
-      width: min(520px, 92vw);
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    #share-modal h3 {
-      font-size: 15px;
-      font-weight: 700;
-      color: #25d366;
-      margin: 0;
-    }
-    #share-preview {
-      background: #111217;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 14px;
-      font-size: 13px;
-      line-height: 1.7;
-      white-space: pre-wrap;
-      color: var(--text);
-      max-height: 320px;
-      overflow-y: auto;
-      font-family: monospace;
-    }
-    .share-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-    #copy-btn {
-      background: rgba(37,211,102,.15);
-      border: 1px solid #25d366;
-      color: #25d366;
-      padding: 9px 22px;
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 700;
-      flex: 1;
-    }
-    #copy-btn:hover { background: rgba(37,211,102,.28); }
-    #wa-link {
-      display: inline-block;
-      background: #25d366;
-      color: #000;
-      padding: 9px 22px;
-      border-radius: 3px;
-      font-size: 14px;
-      font-weight: 700;
-      text-decoration: none;
-      text-align: center;
-      flex: 1;
-    }
-    #wa-link:hover { background: #1fbc58; }
-    #close-share {
+    /* Theme toggle */
+    #theme-btn {
       background: transparent;
       border: 1px solid var(--border);
       color: var(--muted);
-      padding: 9px 16px;
+      padding: 5px 10px;
       border-radius: 3px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 16px;
+      line-height: 1;
+      transition: border-color .15s, color .15s;
     }
-    #copy-confirm {
-      font-size: 12px;
-      color: #25d366;
-      display: none;
-      margin-top: -6px;
-    }
+    #theme-btn:hover { border-color: var(--teal); color: var(--teal); }
 
     .preset-btn {
       background: transparent;
@@ -333,6 +264,7 @@
     <div id="suggestions"></div>
   </div>
   <button id="load-btn">↺ Aktualisieren</button>
+  <button id="theme-btn" title="Hell/Dunkel umschalten">🌙</button>
   <div id="loc-info">Wiesenburg, Mark · 52.02°N 12.47°E</div>
 </div>
 
@@ -398,6 +330,10 @@
       <div class="tile-label">🌡 Bodentemp. 0cm</div>
       <div class="tile-value" id="t-st" style="color:var(--purple)">—</div>
     </div>
+    <div class="tile">
+      <div class="tile-label">🌧 Regen letzte 24h</div>
+      <div class="tile-value" id="t-rain24" style="color:var(--teal)">—</div>
+    </div>
   </div>
 
   <!-- Calendar -->
@@ -413,7 +349,6 @@
         <button class="preset-btn" data-days="14">14 T</button>
         <button class="preset-btn" data-days="30">30 T</button>
         <button class="preset-btn" data-days="60">60 T</button>
-        <button id="share-btn">📲 Teilen</button>
       </div>
     </div>
     <div id="cal-strip"></div>
@@ -438,21 +373,6 @@
     Datenquelle: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> · Kein API-Key erforderlich
   </div>
 </div>
-<!-- Share modal -->
-<div id="share-overlay">
-  <div id="share-modal">
-    <h3>📲 WhatsApp-Nachricht</h3>
-    <pre id="share-preview"></pre>
-    <div id="copy-confirm">✅ In Zwischenablage kopiert!</div>
-    <div class="share-actions">
-      <button id="copy-btn">📋 Text kopieren</button>
-      <a id="wa-link" href="#" target="_blank">💬 WhatsApp Web öffnen</a>
-      <button id="close-share">Schließen</button>
-    </div>
-    <div style="font-size:11px;color:var(--muted)">Tipp: Text kopieren → WhatsApp Desktop oder Web öffnen → in Gruppe einfügen</div>
-  </div>
-</div>
-
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 let loc       = { name: 'Wiesenburg, Mark', lat: 52.02, lon: 12.47 };
@@ -591,6 +511,15 @@ function updateTiles() {
   html('t-wb',  wb != null ? `<span style="color:${wbCol}">${+wb > 0 ? '+'+wb : wb}</span><span class="tile-unit"> mm</span>` : '—');
   html('t-sm',  u(sm0 != null ? (sm0*100).toFixed(1) : null, ' Vol.%'));
   html('t-st',  u(st0?.toFixed(1), ' °C'));
+
+  // Regen letzte 24h: Summe der stündlichen Niederschläge der letzten 24 Stunden
+  let rain24 = null;
+  if (hi >= 0) {
+    const start24 = Math.max(0, hi - 23);
+    rain24 = data.hourly.precipitation.slice(start24, hi + 1)
+      .reduce((s, v) => s + (v ?? 0), 0);
+  }
+  html('t-rain24', u(rain24 != null ? rain24.toFixed(1) : null, ' mm'));
 }
 
 // ── Calendar ──────────────────────────────────────────────────────────────────
@@ -733,12 +662,15 @@ const todayLine = {
 };
 Chart.register(todayLine);
 
-Chart.defaults.color       = '#8fa3b8';
-Chart.defaults.borderColor = '#22263a';
 Chart.defaults.font.family = "'Inter','Helvetica Neue',Arial,sans-serif";
 Chart.defaults.font.size   = 12;
 
 function baseOpts(yUnit, legend=false) {
+  const tc = window._chartTextColor   || '#8fa3b8';
+  const gc = window._chartGridColor   || '#22263a';
+  const tb = window._chartTooltipBg   || '#23262e';
+  const tbc= window._chartTooltipBorder || '#22263a';
+  const bodyCol = isDark ? '#f1f5f9' : '#1e2533';
   return {
     responsive: true,
     maintainAspectRatio: true,
@@ -746,12 +678,12 @@ function baseOpts(yUnit, legend=false) {
     animation: { duration: 300 },
     interaction: { mode: 'index', intersect: false },
     plugins: {
-      legend: { display: legend, position:'top', labels:{ boxWidth:12, font:{size:12}, color:'#8fa3b8' } },
-      tooltip: { backgroundColor:'#23262e', borderColor:'#22263a', borderWidth:1, titleColor:'#8fa3b8', bodyColor:'#f1f5f9', padding:10 }
+      legend: { display: legend, position:'top', labels:{ boxWidth:12, font:{size:12}, color:tc } },
+      tooltip: { backgroundColor:tb, borderColor:tbc, borderWidth:1, titleColor:tc, bodyColor:bodyCol, padding:10 }
     },
     scales: {
-      x: { grid:{ color:'#22263a', drawBorder:false }, ticks:{ maxTicksLimit:12, maxRotation:0, color:'#8fa3b8', font:{size:12} } },
-      y: { grid:{ color:'#22263a', drawBorder:false }, ticks:{ color:'#8fa3b8', font:{size:12}, callback: v => v+yUnit } }
+      x: { grid:{ color:gc, drawBorder:false }, ticks:{ maxTicksLimit:12, maxRotation:0, color:tc, font:{size:12} } },
+      y: { grid:{ color:gc, drawBorder:false }, ticks:{ color:tc, font:{size:12}, callback: v => v+yUnit } }
     }
   };
 }
@@ -858,82 +790,39 @@ document.querySelectorAll('.chart-btn').forEach(btn => {
   });
 });
 
-// ── Share / WhatsApp ──────────────────────────────────────────────────────────
-function buildShareText() {
-  if (!data) return '';
-  const cur  = data.current_weather;
-  const ti   = data.daily.time.indexOf(today);
-  const nowH = new Date().getHours();
-  const hi   = data.hourly.time.findIndex(t => t.startsWith(today) && parseInt(t.slice(11,13)) === nowH);
+// ── Theme toggle ──────────────────────────────────────────────────────────────
+const themeBtn = $('theme-btn');
+let isDark = localStorage.getItem('theme') !== 'light';
 
-  const fmt  = (v, d=1) => v != null ? (+v).toFixed(d) : '—';
-  const now  = new Date().toLocaleString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+function applyTheme() {
+  document.body.classList.toggle('light', !isDark);
+  themeBtn.textContent = isDark ? '🌙' : '☀️';
+  themeBtn.title = isDark ? 'Hellmodus aktivieren' : 'Dunkelmodus aktivieren';
 
-  // Aktuelle Werte
-  const tMax  = ti>=0 ? fmt(data.daily.temperature_2m_max[ti], 0)  : '—';
-  const tMin  = ti>=0 ? fmt(data.daily.temperature_2m_min[ti], 0)  : '—';
-  const prec  = ti>=0 ? fmt(data.daily.precipitation_sum[ti], 1)   : '—';
-  const et0   = ti>=0 ? fmt(data.daily.et0_fao_evapotranspiration?.[ti], 1) : '—';
-  const wb    = (ti>=0 && data.daily.et0_fao_evapotranspiration?.[ti] != null)
-    ? (data.daily.precipitation_sum[ti] - data.daily.et0_fao_evapotranspiration[ti]).toFixed(1)
-    : null;
-  const wbStr = wb != null ? `${+wb >= 0 ? '+' : ''}${wb} mm ${+wb >= 0 ? '✅' : +wb >= -10 ? '🟡' : '🔴'}` : '—';
-  const sm0   = (hi>=0 && data.hourly.soil_moisture_0_to_1cm?.[hi] != null)
-    ? (data.hourly.soil_moisture_0_to_1cm[hi]*100).toFixed(1) : '—';
-  const wind  = fmt(cur?.windspeed, 0);
-  const hum   = hi>=0 ? fmt(data.hourly.relativehumidity_2m[hi], 0) : '—';
+  const textColor = isDark ? '#8fa3b8' : '#5a6a82';
+  const gridColor = isDark ? '#22263a' : '#dde3ec';
+  const tooltipBg = isDark ? '#23262e' : '#ffffff';
+  const tooltipBorder = isDark ? '#22263a' : '#dde3ec';
 
-  // 3-Tage-Prognose
-  const fcLines = [];
-  for (let i = ti+1; i < Math.min(ti+4, data.daily.time.length); i++) {
-    if (i < 0) continue;
-    const d   = new Date(data.daily.time[i]+'T12:00');
-    const lbl = d.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'});
-    const p   = data.daily.precipitation_sum[i];
-    const ico = wmoI(data.daily.weathercode[i]);
-    const rain = p > 0.2 ? `🌧 ${p.toFixed(1)} mm` : '☀️ trocken';
-    fcLines.push(`  ${lbl}: ${fmt(data.daily.temperature_2m_min[i],0)}°/${fmt(data.daily.temperature_2m_max[i],0)}°C  ${ico} ${rain}`);
-  }
+  Chart.defaults.color       = textColor;
+  Chart.defaults.borderColor = gridColor;
 
-  return `🌾 *${loc.name}* | ${now} Uhr
-━━━━━━━━━━━━━━━━━━
-🌡️ Temp:         *${fmt(cur?.temperature, 1)}°C*  (↑${tMax}° / ↓${tMin}°)
-💧 Niederschlag: *${prec} mm*
-💨 Wind:         *${wind} km/h*
-💦 Luftfeuchte:  *${hum} %*
-🌿 ET₀:          *${et0} mm*
-⚖️ Wasserbilanz: *${wbStr}*
-🟤 Bodenfeuchte: *${sm0} Vol.%*
-━━━━━━━━━━━━━━━━━━
-📡 *Prognose:*
-${fcLines.join('\n')}`;
+  // Patch baseOpts to use current theme colors
+  window._chartTextColor   = textColor;
+  window._chartGridColor   = gridColor;
+  window._chartTooltipBg   = tooltipBg;
+  window._chartTooltipBorder = tooltipBorder;
+
+  if (data) renderChart();
 }
 
-// Share modal
-const overlay = $('share-overlay');
-
-$('share-btn').addEventListener('click', () => {
-  const text = buildShareText();
-  if (!text) return;
-  $('share-preview').textContent = text;
-  $('wa-link').href = 'https://wa.me/?text=' + encodeURIComponent(text);
-  $('copy-confirm').style.display = 'none';
-  overlay.style.display = 'flex';
+themeBtn.addEventListener('click', () => {
+  isDark = !isDark;
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  applyTheme();
 });
 
-$('copy-btn').addEventListener('click', async () => {
-  const text = $('share-preview').textContent;
-  try {
-    await navigator.clipboard.writeText(text);
-    $('copy-confirm').style.display = 'block';
-    setTimeout(() => { $('copy-confirm').style.display = 'none'; }, 2500);
-  } catch {
-    $('share-preview').select?.();
-  }
-});
-
-$('close-share').addEventListener('click', () => { overlay.style.display = 'none'; });
-overlay.addEventListener('click', e => { if (e.target === overlay) overlay.style.display = 'none'; });
+applyTheme();
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 $('load-btn').addEventListener('click', () => loadWeather(loadedPastDays));
