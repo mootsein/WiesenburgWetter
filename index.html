@@ -396,6 +396,92 @@
 
     #chart-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 10px; }
 
+    /* ── Zeitraum-Analyse ── */
+    #analysis-panel {
+      background: var(--panel);
+      border: 1px solid rgba(250,204,21,.3);
+      border-radius: 3px;
+      padding: 14px 16px;
+      margin-bottom: 8px;
+    }
+    #analysis-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    #analysis-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--yellow);
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      white-space: nowrap;
+    }
+    #analysis-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+    #analysis-controls span { font-size: 11px; color: var(--muted); }
+    .analysis-date {
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 5px 8px;
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+      color-scheme: dark;
+    }
+    body.light .analysis-date { color-scheme: light; }
+    .analysis-date:focus { border-color: var(--yellow); }
+    #analysis-load-btn {
+      background: rgba(250,204,21,.1);
+      border: 1px solid var(--yellow);
+      color: var(--yellow);
+      padding: 5px 14px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    #analysis-load-btn:hover { background: rgba(250,204,21,.2); }
+    #analysis-load-btn:disabled { opacity: .5; cursor: wait; }
+    #analysis-info {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      display: none;
+    }
+    #analysis-loading {
+      font-size: 11px;
+      color: var(--muted);
+      display: none;
+    }
+    #summary-tiles {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 6px;
+    }
+    .stile {
+      background: rgba(250,204,21,.04);
+      border: 1px solid rgba(250,204,21,.15);
+      border-radius: 3px;
+      padding: 10px 8px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .stile-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .stile-value { font-size: 28px; font-weight: 300; line-height: 1.1; }
+    .stile-unit  { font-size: 11px; color: var(--muted); margin-left: 2px; }
+
     /* ── Footer ── */
     #footer { font-size: 10px; color: var(--muted); text-align: center; padding-top: 4px; }
     #footer a { color: var(--muted); }
@@ -525,6 +611,23 @@
       <button class="schlag-form-btn" id="schlag-save-btn">✓ Speichern</button>
       <button class="schlag-form-btn" id="schlag-cancel-btn" style="color:var(--muted)">✕</button>
     </div>
+  </div>
+
+  <!-- Zeitraum-Analyse -->
+  <div id="analysis-panel">
+    <div id="analysis-header">
+      <div id="analysis-title">📊 Zeitraum-Analyse</div>
+      <div id="analysis-controls">
+        <span>Von</span>
+        <input type="date" id="analysis-from" class="analysis-date"/>
+        <span>Bis</span>
+        <input type="date" id="analysis-to" class="analysis-date"/>
+        <button id="analysis-load-btn">↺ Analysieren</button>
+        <span id="analysis-loading">⏳ Lädt…</span>
+      </div>
+    </div>
+    <div id="analysis-info"></div>
+    <div id="summary-tiles"></div>
   </div>
 
   <!-- Calendar -->
@@ -673,6 +776,9 @@ async function loadWeather(pastDays = 5) {
 
     hd('loading');
     sh('dashboard', 'block');
+
+    // Analyse automatisch für geladenen Zeitraum aktualisieren
+    triggerAnalysis(data.daily.time[0], data.daily.time[data.daily.time.length-1]);
   } catch(e) {
     $('error-bar').textContent = '⚠️ Fehler: ' + e.message;
     sh('error-bar', 'block');
@@ -849,6 +955,7 @@ function clickDay(date) {
     } else {
       renderCalendar();
       renderChart();
+      triggerAnalysis(a, b);
     }
   }
 }
@@ -1265,6 +1372,123 @@ function startAutoRefresh() {
     loadWeather(loadedPastDays);
   }, 30 * 60 * 1000);
 }
+
+// ── Zeitraum-Analyse ──────────────────────────────────────────────────────────
+
+function calcSummary(srcData, startDate, endDate) {
+  const d = srcData.daily;
+  const idx = [];
+  d.time.forEach((t, i) => { if (t >= startDate && t <= endDate) idx.push(i); });
+  if (!idx.length) return null;
+
+  const get  = (arr, i) => arr?.[i] ?? null;
+  const vals = key => idx.map(i => get(d[key], i)).filter(v => v != null);
+  const sum  = arr => arr.reduce((s, v) => s + v, 0);
+  const avg  = arr => arr.length ? sum(arr) / arr.length : null;
+
+  const maxArr   = vals('temperature_2m_max');
+  const minArr   = vals('temperature_2m_min');
+  const precips  = vals('precipitation_sum');
+  const et0s     = vals('et0_fao_evapotranspiration');
+  const winds    = vals('windspeed_10m_max');
+
+  // Ø Temp = Mittel aus (max+min)/2 pro Tag
+  const meanArr  = idx.map(i => {
+    const mx = get(d['temperature_2m_max'], i);
+    const mn = get(d['temperature_2m_min'], i);
+    return (mx != null && mn != null) ? (mx + mn) / 2 : null;
+  }).filter(v => v != null);
+
+  const totalPrecip = sum(precips);
+  const totalEt0    = et0s.length ? sum(et0s) : null;
+  const wb          = totalEt0 != null ? totalPrecip - totalEt0 : null;
+
+  return {
+    days:         idx.length,
+    totalPrecip,
+    totalEt0,
+    wb,
+    avgTemp:      avg(meanArr),
+    maxTemp:      maxArr.length ? Math.max(...maxArr) : null,
+    minTemp:      minArr.length ? Math.min(...minArr) : null,
+    avgWind:      avg(winds),
+    rainDays:     precips.filter(p => p >= 1).length,
+    frostDays:    minArr.filter(t => t < 0).length,
+  };
+}
+
+function renderSummary(srcData, startDate, endDate) {
+  const s = calcSummary(srcData, startDate, endDate);
+  if (!s) { $('summary-tiles').innerHTML = '<span style="color:var(--muted);font-size:12px">Keine Daten für diesen Zeitraum.</span>'; return; }
+
+  const fmt  = (v, d=1, prefix='') => v != null ? prefix + (+v).toFixed(d) : '—';
+  const wbCol = s.wb == null ? 'var(--muted)' : s.wb >= 0 ? 'var(--green)' : s.wb >= -30 ? 'var(--yellow)' : 'var(--red)';
+
+  const info = `${startDate}  →  ${endDate}  ·  ${s.days} Tage`;
+  $('analysis-info').textContent = info;
+  $('analysis-info').style.display = 'block';
+
+  const tiles = [
+    { label: '🌧 Niederschlag ges.',  val: fmt(s.totalPrecip,1),                 unit: 'mm',   col: 'var(--teal)'   },
+    { label: '🌡 Ø Temperatur',       val: fmt(s.avgTemp,1),                     unit: '°C',   col: 'var(--orange)' },
+    { label: '↑ Temp Maximum',        val: fmt(s.maxTemp,1),                     unit: '°C',   col: 'var(--red)'    },
+    { label: '↓ Temp Minimum',        val: fmt(s.minTemp,1),                     unit: '°C',   col: 'var(--blue)'   },
+    { label: '🌿 ET₀ gesamt',         val: fmt(s.totalEt0,1),                    unit: 'mm',   col: 'var(--green)'  },
+    { label: '⚖️ Wasserbilanz',       val: fmt(s.wb,1, s.wb!=null&&s.wb>0?'+':''), unit: 'mm', col: wbCol           },
+    { label: '💧 Regentage ≥1mm',     val: s.rainDays,                           unit: 'T',    col: 'var(--teal)'   },
+    { label: '🧊 Frosttage <0°',      val: s.frostDays,                          unit: 'T',    col: 'var(--blue)'   },
+    { label: '💨 Ø Wind',             val: fmt(s.avgWind,0),                     unit: 'km/h', col: 'var(--green)'  },
+  ];
+
+  $('summary-tiles').innerHTML = tiles.map(t => `
+    <div class="stile">
+      <div class="stile-label">${t.label}</div>
+      <div class="stile-value" style="color:${t.col}">${t.val}<span class="stile-unit"> ${t.unit}</span></div>
+    </div>`).join('');
+}
+
+async function loadHistorical(startDate, endDate) {
+  $('analysis-loading').style.display = 'inline';
+  $('analysis-load-btn').disabled = true;
+  try {
+    const u = new URL('https://archive-api.open-meteo.com/v1/archive');
+    u.searchParams.set('latitude',   loc.lat);
+    u.searchParams.set('longitude',  loc.lon);
+    u.searchParams.set('start_date', startDate);
+    u.searchParams.set('end_date',   endDate);
+    u.searchParams.set('daily',      'temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,weathercode,et0_fao_evapotranspiration');
+    u.searchParams.set('timezone',   'auto');
+    const r = await fetch(u);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const hist = await r.json();
+    renderSummary(hist, startDate, endDate);
+  } catch(e) {
+    $('analysis-info').textContent = '⚠️ Fehler beim Laden: ' + e.message;
+    $('analysis-info').style.display = 'block';
+  } finally {
+    $('analysis-loading').style.display = 'none';
+    $('analysis-load-btn').disabled = false;
+  }
+}
+
+function triggerAnalysis(startDate, endDate) {
+  if (!startDate || !endDate || startDate > endDate) return;
+  $('analysis-from').value = startDate;
+  $('analysis-to').value   = endDate;
+  // Innerhalb geladener Daten → direkt berechnen
+  if (data && startDate >= data.daily.time[0] && endDate <= data.daily.time[data.daily.time.length-1]) {
+    renderSummary(data, startDate, endDate);
+  } else {
+    loadHistorical(startDate, endDate);
+  }
+}
+
+$('analysis-load-btn').addEventListener('click', () => {
+  const from = $('analysis-from').value;
+  const to   = $('analysis-to').value;
+  if (!from || !to) return;
+  triggerAnalysis(from, to);
+});
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 $('load-btn').addEventListener('click', () => loadWeather(loadedPastDays));
