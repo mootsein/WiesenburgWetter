@@ -767,6 +767,7 @@
 // ── State ─────────────────────────────────────────────────────────────────────
 let loc       = { name: 'Wiesenburg, Mark', lat: 52.02, lon: 12.47 };
 let data      = null;
+let chartData = null; // zeigt auf data (Forecast) oder _lastAnalysisData (Archiv)
 let rng       = { start: null, end: null, sel: false };
 let chartMode = 'temp';
 let loadedPastDays = 0;
@@ -891,6 +892,7 @@ async function loadWeather(pastDays = 0, targetRng = null) {
     const r = await fetch(u);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     data = await r.json();
+    chartData = data; // Forecast ist Standard-Datenquelle für Charts
     loadedPastDays = pastDays;
 
     rng = targetRng
@@ -1068,6 +1070,7 @@ function renderCalendar() {
 
 function clickDay(date) {
   // Klick auf Kalender → tageweise, alle Schnell-Filter aufheben
+  chartData = data; // zurück auf Forecast/geladene Daten
   $('heute-btn').classList.remove('active');
   document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
 
@@ -1112,6 +1115,7 @@ function toLocalDate(d) {
 
 $('heute-btn').addEventListener('click', () => {
   if (!data) return;
+  chartData = data;
   const now    = new Date();
   const minus12 = new Date(now.getTime() - 12 * 3600 * 1000);
   const plus12  = new Date(now.getTime() + 12 * 3600 * 1000);
@@ -1135,6 +1139,7 @@ document.querySelectorAll('.preset-btn').forEach(btn => {
     document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
     $('heute-btn').classList.remove('active');
     btn.classList.add('active');
+    chartData = data; // zurück auf Forecast-Daten
     const tRng = { start: today, end: addDays(today, days - 1) };
     // Daten bereits geladen und reichen aus → nur Range setzen
     if (data && tRng.end <= data.daily.time[data.daily.time.length - 1] && data.daily.time[0] <= today) {
@@ -1150,35 +1155,52 @@ document.querySelectorAll('.preset-btn').forEach(btn => {
 
 // ── Filtered data ─────────────────────────────────────────────────────────────
 function getHourly() {
+  const src = chartData || data;
   const labels=[], temp=[], precip=[], wind=[], hum=[], sm0=[], sm1=[];
-  data.hourly.time.forEach((t,i) => {
-    const d = t.split('T')[0];
-    // Stündliche Filterung wenn startDT/endDT gesetzt (z.B. Heute ±12h), sonst tageweise
-    const inRange = rng.startDT
-      ? (t >= rng.startDT && t <= rng.endDT)
-      : (d >= rng.start  && d <= rng.end);
-    if (inRange) {
-      labels.push(`${fmtDate(d).slice(0,5)} ${t.slice(11,16)}`);
-      temp.push(data.hourly.temperature_2m[i]);
-      precip.push(data.hourly.precipitation[i]);
-      wind.push(data.hourly.windspeed_10m[i]);
-      hum.push(data.hourly.relativehumidity_2m[i]);
-      const s0 = data.hourly.soil_moisture_0_to_1cm?.[i];
-      const s1 = data.hourly.soil_moisture_1_to_3cm?.[i];
-      sm0.push(s0 != null ? +(s0*100).toFixed(2) : null);
-      sm1.push(s1 != null ? +(s1*100).toFixed(2) : null);
-    }
-  });
+
+  if (src.hourly) {
+    // Stundendaten verfügbar (Forecast)
+    src.hourly.time.forEach((t,i) => {
+      const d = t.split('T')[0];
+      const inRange = rng.startDT
+        ? (t >= rng.startDT && t <= rng.endDT)
+        : (d >= rng.start  && d <= rng.end);
+      if (inRange) {
+        labels.push(`${fmtDate(d).slice(0,5)} ${t.slice(11,16)}`);
+        temp.push(src.hourly.temperature_2m[i]);
+        precip.push(src.hourly.precipitation[i]);
+        wind.push(src.hourly.windspeed_10m[i]);
+        hum.push(src.hourly.relativehumidity_2m[i]);
+        const s0 = src.hourly.soil_moisture_0_to_1cm?.[i];
+        const s1 = src.hourly.soil_moisture_1_to_3cm?.[i];
+        sm0.push(s0 != null ? +(s0*100).toFixed(2) : null);
+        sm1.push(s1 != null ? +(s1*100).toFixed(2) : null);
+      }
+    });
+  } else {
+    // Nur Tagesdaten verfügbar (Archiv) → Tageswerte als Proxy
+    src.daily.time.forEach((d,i) => {
+      if (d < rng.start || d > rng.end) return;
+      labels.push(new Date(d+'T12:00').toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}));
+      temp.push(src.daily.temperature_2m_max?.[i] ?? null);
+      precip.push(src.daily.precipitation_sum?.[i] ?? null);
+      wind.push(src.daily.windspeed_10m_max?.[i] ?? null);
+      hum.push(null);
+      sm0.push(null);
+      sm1.push(null);
+    });
+  }
   return { labels, temp, precip, wind, hum, sm0, sm1 };
 }
 
 function getDaily() {
+  const src = chartData || data;
   const labels=[], et0=[], precipD=[];
-  data.daily.time.forEach((d,i) => {
+  src.daily.time.forEach((d,i) => {
     if (d >= rng.start && d <= rng.end) {
       labels.push(new Date(d+'T12:00').toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'}));
-      et0.push(data.daily.et0_fao_evapotranspiration?.[i] ?? null);
-      precipD.push(data.daily.precipitation_sum?.[i] ?? null);
+      et0.push(src.daily.et0_fao_evapotranspiration?.[i] ?? null);
+      precipD.push(src.daily.precipitation_sum?.[i] ?? null);
     }
   });
   return { labels, et0, precipD };
@@ -1355,6 +1377,8 @@ $('summary-tiles').addEventListener('click', e => {
   const to   = $('analysis-to').value;
   if (from && to && data) {
     rng = { start: from, end: to, sel: false };
+    // Wenn Archivdaten geladen → chartData darauf zeigen lassen
+    if (window._lastAnalysisData) chartData = window._lastAnalysisData;
     syncFilterButtons();
     renderCalendar();
   }
@@ -1778,6 +1802,7 @@ $('analysis-reset-btn').addEventListener('click', () => {
 // ── Kalender-Filter Reset ──────────────────────────────────────────────────────
 $('cal-reset-btn').addEventListener('click', () => {
   if (!data) return;
+  chartData = data; // zurück auf Forecast-Daten
   // Zurück auf 5T-Preset (Standard)
   rng = { start: today, end: addDays(today, 4), sel: false };
   document.querySelectorAll('.preset-btn').forEach(b =>
