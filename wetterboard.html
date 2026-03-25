@@ -1198,7 +1198,7 @@ function getDaily() {
   const labels=[], et0=[], precipD=[];
   src.daily.time.forEach((d,i) => {
     if (d >= rng.start && d <= rng.end) {
-      labels.push(new Date(d+'T12:00').toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'2-digit'}));
+      labels.push(fmtDate(d).slice(0,5)); // DD.MM
       et0.push(src.daily.et0_fao_evapotranspiration?.[i] ?? null);
       precipD.push(src.daily.precipitation_sum?.[i] ?? null);
     }
