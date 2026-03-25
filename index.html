@@ -465,29 +465,82 @@
     }
     #summary-tiles {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
       gap: 6px;
     }
     .stile {
       background: rgba(250,204,21,.04);
       border: 1px solid rgba(250,204,21,.15);
       border-radius: 3px;
-      padding: 10px 8px 12px;
+      padding: 8px 12px;
       display: flex;
-      flex-direction: column;
       align-items: center;
-      text-align: center;
+      gap: 10px;
     }
-    .stile-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
-    .stile-value { font-size: 28px; font-weight: 300; line-height: 1.1; }
+    .stile-left { flex: 0 0 auto; }
+    .stile-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+    .stile-value { font-size: 24px; font-weight: 300; line-height: 1.1; }
     .stile-unit  { font-size: 11px; color: var(--muted); margin-left: 2px; }
+    .stile-canvas { flex: 1 1 0; height: 48px; min-width: 60px; }
+    .stile { cursor: pointer; transition: border-color .15s, background .15s; }
+    .stile:hover { border-color: rgba(250,204,21,.45); background: rgba(250,204,21,.08); }
+    .stile.chart-active { border-color: var(--teal); background: rgba(0,212,255,.06); }
 
     /* ── Footer ── */
     #footer { font-size: 10px; color: var(--muted); text-align: center; padding-top: 4px; }
     #footer a { color: var(--muted); }
+
+    /* ── Update-Banner ── */
+    #update-banner {
+      display: none;
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--panel);
+      border: 1px solid var(--teal);
+      border-radius: 6px;
+      padding: 10px 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.4);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      white-space: nowrap;
+      font-size: 13px;
+    }
+    #update-banner.visible { display: flex; }
+    #update-banner span { color: var(--text); }
+    #update-reload-btn {
+      background: var(--teal);
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    #update-reload-btn:hover { opacity: .85; }
+    #update-dismiss-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0 2px;
+    }
   </style>
 </head>
 <body>
+
+<!-- Update-Banner -->
+<div id="update-banner">
+  <span>🔄 Neue Version verfügbar</span>
+  <button id="update-reload-btn">Jetzt aktualisieren</button>
+  <button id="update-dismiss-btn" title="Später">✕</button>
+</div>
 
 <!-- Header -->
 <div id="header">
@@ -639,10 +692,8 @@
       </div>
       <div class="cal-btns">
         <button id="heute-btn" title="Letzte & nächste 12 Stunden">⏱ Heute ±12h</button>
-        <button class="preset-btn active" data-days="10">10 T</button>
-        <button class="preset-btn" data-days="14">14 T</button>
-        <button class="preset-btn" data-days="30">30 T</button>
-        <button class="preset-btn" data-days="60">60 T</button>
+        <button class="preset-btn active" data-days="5">5 T</button>
+        <button class="preset-btn" data-days="10">10 T</button>
       </div>
     </div>
     <div id="cal-strip"></div>
@@ -673,8 +724,9 @@ let loc       = { name: 'Wiesenburg, Mark', lat: 52.02, lon: 12.47 };
 let data      = null;
 let rng       = { start: null, end: null, sel: false };
 let chartMode = 'temp';
-let loadedPastDays = 5;
+let loadedPastDays = 0;
 let CHS       = {};
+let stileCharts = [];
 
 const today = new Date().toISOString().split('T')[0];
 
@@ -744,8 +796,37 @@ async function fetchSugs(q) {
   } catch { hd('suggestions'); }
 }
 
+// ── Datum-Hilfsfunktionen ──────────────────────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}.${m}.${y}`;
+}
+
 // ── Fetch weather ─────────────────────────────────────────────────────────────
-async function loadWeather(pastDays = 5) {
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T12:00');
+  d.setDate(d.getDate() + n);
+  const p = x => String(x).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+
+// ── Filter-Buttons synchron halten ───────────────────────────────────────────
+// Liest den aktuellen rng-State und aktualisiert alle Buttons entsprechend.
+// Wird nach jeder Range-Änderung aufgerufen.
+function syncFilterButtons() {
+  const isHeute = !!rng.startDT;
+  const is5T    = !rng.startDT && rng.start === today && rng.end === addDays(today, 4);
+  const is10T   = !rng.startDT && rng.start === today && rng.end === addDays(today, 9);
+
+  $('heute-btn').classList.toggle('active', isHeute);
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    const d = parseInt(btn.dataset.days);
+    btn.classList.toggle('active', (d === 5 && is5T) || (d === 10 && is10T));
+  });
+}
+
+async function loadWeather(pastDays = 0, targetRng = null) {
   hd('empty'); hd('dashboard'); hd('error-bar');
   sh('loading');
   $('load-btn').disabled = true;
@@ -759,7 +840,7 @@ async function loadWeather(pastDays = 5) {
     u.searchParams.set('daily',           'temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,weathercode,et0_fao_evapotranspiration,sunrise,sunset');
     u.searchParams.set('current_weather', 'true');
     u.searchParams.set('past_days',       String(pastDays));
-    u.searchParams.set('forecast_days',   '5');
+    u.searchParams.set('forecast_days',   '10');
     u.searchParams.set('timezone',        'auto');
 
     const r = await fetch(u);
@@ -767,18 +848,21 @@ async function loadWeather(pastDays = 5) {
     data = await r.json();
     loadedPastDays = pastDays;
 
-    rng = { start: data.daily.time[0], end: data.daily.time[data.daily.time.length-1], sel: false };
+    rng = targetRng
+      ? { ...targetRng, sel: false }
+      : { start: data.daily.time[0], end: data.daily.time[data.daily.time.length-1], sel: false };
 
     updateLocInfo();
     updateTiles();
     renderCalendar();
     renderChart();
+    syncFilterButtons(); // Button-States an neuen rng anpassen
 
     hd('loading');
     sh('dashboard', 'block');
 
     // Analyse automatisch für geladenen Zeitraum aktualisieren
-    triggerAnalysis(data.daily.time[0], data.daily.time[data.daily.time.length-1]);
+    triggerAnalysis(rng.start, rng.end);
   } catch(e) {
     $('error-bar').textContent = '⚠️ Fehler: ' + e.message;
     sh('error-bar', 'block');
@@ -938,32 +1022,37 @@ function renderCalendar() {
 }
 
 function clickDay(date) {
-  // Klick auf Kalender → tageweise, ±12h-Modus aufheben
+  // Klick auf Kalender → tageweise, alle Schnell-Filter aufheben
   $('heute-btn').classList.remove('active');
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+
   if (!rng.sel) {
+    // Erster Klick: Von-Datum setzen
     rng = { start: date, end: date, sel: true };
     renderCalendar();
   } else {
+    // Zweiter Klick: Bis-Datum setzen, Range fertig
     const s = rng.start;
     const [a, b] = date < s ? [date, s] : [s, date];
-    rng = { start: a, end: b, sel: false }; // kein startDT/endDT → tageweise
+    rng = { start: a, end: b, sel: false };
 
     // Nachladebedarf prüfen: ist start-Datum älter als geladene Daten?
     if (a < data.daily.time[0]) {
       const daysNeeded = Math.ceil((new Date(today) - new Date(a)) / 864e5) + 2;
-      loadWeather(Math.min(daysNeeded, 92));
+      loadWeather(Math.min(daysNeeded, 92), { start: a, end: b });
     } else {
       renderCalendar();
       renderChart();
       triggerAnalysis(a, b);
+      syncFilterButtons(); // ggf. Preset-Button aktivieren wenn Range zufällig passt
     }
   }
 }
 
 function updateRngInfo() {
   $('cal-range').textContent = rng.sel
-    ? `Von: ${rng.start} → Enddatum wählen`
-    : `${rng.start}  →  ${rng.end}`;
+    ? `Von: ${fmtDate(rng.start)} → Enddatum wählen`
+    : `${fmtDate(rng.start)}  →  ${fmtDate(rng.end)}`;
 }
 
 // Heute ±12h Button
@@ -994,14 +1083,23 @@ $('heute-btn').addEventListener('click', () => {
   renderChart();
 });
 
-// Preset-Buttons
+// Preset-Buttons (5T = heute → +4, 10T = heute → +9, nur Prognosedaten)
 document.querySelectorAll('.preset-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const days = parseInt(btn.dataset.days);
     document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
     $('heute-btn').classList.remove('active');
     btn.classList.add('active');
-    loadWeather(days - 5);
+    const tRng = { start: today, end: addDays(today, days - 1) };
+    // Daten bereits geladen und reichen aus → nur Range setzen
+    if (data && tRng.end <= data.daily.time[data.daily.time.length - 1] && data.daily.time[0] <= today) {
+      rng = { ...tRng, sel: false };
+      renderCalendar();
+      renderChart();
+      triggerAnalysis(tRng.start, tRng.end);
+    } else {
+      loadWeather(0, tRng);
+    }
   });
 });
 
@@ -1185,12 +1283,39 @@ function renderChart() {
   );
 }
 
+// ── Chart-Modus wechseln (von Buttons oder Analyse-Kacheln) ──────────────────
+function switchChartMode(mode) {
+  chartMode = mode;
+  document.querySelectorAll('.chart-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  renderChart();
+  $('chart-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 // ── Chart-Button clicks ───────────────────────────────────────────────────────
 document.querySelectorAll('.chart-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    chartMode = btn.dataset.mode;
-    renderChart();
-  });
+  btn.addEventListener('click', () => switchChartMode(btn.dataset.mode));
+});
+
+// ── Analyse-Kacheln: EIN delegierter Listener (nie doppelt) ──────────────────
+// Statt pro renderSummary-Aufruf neue Listener zu registrieren, hört ein
+// einziger Listener auf dem Container — kein Memory-Leak, kein Stacking.
+$('summary-tiles').addEventListener('click', e => {
+  const stile = e.target.closest('.stile');
+  if (!stile) return;
+  // Chart-Active-Highlight
+  document.querySelectorAll('.stile').forEach(s => s.classList.remove('chart-active'));
+  stile.classList.add('chart-active');
+  // rng auf den Analyse-Zeitraum setzen, damit der Hauptchart denselben Zeitraum zeigt
+  const from = $('analysis-from').value;
+  const to   = $('analysis-to').value;
+  if (from && to && data) {
+    rng = { start: from, end: to, sel: false };
+    syncFilterButtons();
+    renderCalendar();
+  }
+  // Hauptchart schalten
+  const mode = stile.dataset.mode;
+  if (mode) switchChartMode(mode);
 });
 
 // ── Theme toggle ──────────────────────────────────────────────────────────────
@@ -1369,7 +1494,9 @@ let autoRefreshTimer = null;
 function startAutoRefresh() {
   if (autoRefreshTimer) clearInterval(autoRefreshTimer);
   autoRefreshTimer = setInterval(() => {
-    loadWeather(loadedPastDays);
+    // Aktuellen Range erhalten (außer heute±12h — der wird neu berechnet)
+    const savedRng = rng.startDT ? null : { start: rng.start, end: rng.end };
+    loadWeather(loadedPastDays, savedRng);
   }, 30 * 60 * 1000);
 }
 
@@ -1418,33 +1545,94 @@ function calcSummary(srcData, startDate, endDate) {
 }
 
 function renderSummary(srcData, startDate, endDate) {
+  // Destroy old sparkline charts
+  stileCharts.forEach(c => { try { c.destroy(); } catch {} });
+  stileCharts = [];
+
   const s = calcSummary(srcData, startDate, endDate);
   if (!s) { $('summary-tiles').innerHTML = '<span style="color:var(--muted);font-size:12px">Keine Daten für diesen Zeitraum.</span>'; return; }
 
-  const fmt  = (v, d=1, prefix='') => v != null ? prefix + (+v).toFixed(d) : '—';
+  const fmt   = (v, d=1, prefix='') => v != null ? prefix + (+v).toFixed(d) : '—';
   const wbCol = s.wb == null ? 'var(--muted)' : s.wb >= 0 ? 'var(--green)' : s.wb >= -30 ? 'var(--yellow)' : 'var(--red)';
 
-  const info = `${startDate}  →  ${endDate}  ·  ${s.days} Tage`;
-  $('analysis-info').textContent = info;
+  $('analysis-info').textContent = `${fmtDate(startDate)}  →  ${fmtDate(endDate)}  ·  ${s.days} Tage`;
   $('analysis-info').style.display = 'block';
 
+  // Build daily arrays for sparklines
+  const days = [], precD = [], maxT = [], minT = [], et0D = [], windD = [];
+  srcData.daily.time.forEach((d, i) => {
+    if (d < startDate || d > endDate) return;
+    days.push(fmtDate(d).slice(0,5)); // DD.MM
+    precD.push(srcData.daily.precipitation_sum?.[i] ?? 0);
+    maxT.push(srcData.daily.temperature_2m_max?.[i] ?? null);
+    minT.push(srcData.daily.temperature_2m_min?.[i] ?? null);
+    et0D.push(srcData.daily.et0_fao_evapotranspiration?.[i] ?? null);
+    windD.push(srcData.daily.windspeed_10m_max?.[i] ?? null);
+  });
+  const avgT = maxT.map((mx, i) => mx != null && minT[i] != null ? +((mx + minT[i]) / 2).toFixed(1) : null);
+  const wbD  = precD.map((p, i) => et0D[i] != null ? +(p - et0D[i]).toFixed(1) : null);
+
   const tiles = [
-    { label: '🌧 Niederschlag ges.',  val: fmt(s.totalPrecip,1),                 unit: 'mm',   col: 'var(--teal)'   },
-    { label: '🌡 Ø Temperatur',       val: fmt(s.avgTemp,1),                     unit: '°C',   col: 'var(--orange)' },
-    { label: '↑ Temp Maximum',        val: fmt(s.maxTemp,1),                     unit: '°C',   col: 'var(--red)'    },
-    { label: '↓ Temp Minimum',        val: fmt(s.minTemp,1),                     unit: '°C',   col: 'var(--blue)'   },
-    { label: '🌿 ET₀ gesamt',         val: fmt(s.totalEt0,1),                    unit: 'mm',   col: 'var(--green)'  },
-    { label: '⚖️ Wasserbilanz',       val: fmt(s.wb,1, s.wb!=null&&s.wb>0?'+':''), unit: 'mm', col: wbCol           },
-    { label: '💧 Regentage ≥1mm',     val: s.rainDays,                           unit: 'T',    col: 'var(--teal)'   },
-    { label: '🧊 Frosttage <0°',      val: s.frostDays,                          unit: 'T',    col: 'var(--blue)'   },
-    { label: '💨 Ø Wind',             val: fmt(s.avgWind,0),                     unit: 'km/h', col: 'var(--green)'  },
+    { label: '🌧 Niederschlag ges.', val: fmt(s.totalPrecip,1),                          unit: 'mm',   col: 'var(--teal)',   series: precD, type:'bar',  color:'#00d4ff', mode:'rain' },
+    { label: '🌡 Ø Temperatur',      val: fmt(s.avgTemp,1),                               unit: '°C',   col: 'var(--orange)', series: avgT,  type:'line', color:'#fb923c', mode:'temp' },
+    { label: '↑ Temp Maximum',       val: fmt(s.maxTemp,1),                               unit: '°C',   col: 'var(--red)',    series: maxT,  type:'line', color:'#ef4444', mode:'temp' },
+    { label: '↓ Temp Minimum',       val: fmt(s.minTemp,1),                               unit: '°C',   col: 'var(--blue)',   series: minT,  type:'line', color:'#60a5fa', mode:'temp' },
+    { label: '🌿 ET₀ gesamt',        val: fmt(s.totalEt0,1),                              unit: 'mm',   col: 'var(--green)',  series: et0D,  type:'bar',  color:'#34d399', mode:'et0'  },
+    { label: '⚖️ Wasserbilanz',      val: fmt(s.wb,1, s.wb!=null&&s.wb>0?'+':''),         unit: 'mm',   col: wbCol,           series: wbD,   type:'bar',  color:'#a78bfa', mode:'et0'  },
+    { label: '💧 Regentage ≥1mm',    val: s.rainDays,                                     unit: 'T',    col: 'var(--teal)',   series: precD, type:'bar',  color:'#00d4ff', mode:'rain' },
+    { label: '🧊 Frosttage <0°',     val: s.frostDays,                                    unit: 'T',    col: 'var(--blue)',   series: minT,  type:'line', color:'#60a5fa', mode:'temp' },
+    { label: '💨 Ø Wind',            val: fmt(s.avgWind,0),                               unit: 'km/h', col: 'var(--green)',  series: windD, type:'line', color:'#34d399', mode:'wind' },
   ];
 
-  $('summary-tiles').innerHTML = tiles.map(t => `
-    <div class="stile">
-      <div class="stile-label">${t.label}</div>
-      <div class="stile-value" style="color:${t.col}">${t.val}<span class="stile-unit"> ${t.unit}</span></div>
+  $('summary-tiles').innerHTML = tiles.map((t, i) => `
+    <div class="stile" data-mode="${t.mode || ''}" data-idx="${i}">
+      <div class="stile-left">
+        <div class="stile-label">${t.label}</div>
+        <div class="stile-value" style="color:${t.col}">${t.val}<span class="stile-unit"> ${t.unit}</span></div>
+      </div>
+      <canvas class="stile-canvas" id="sc-${i}"></canvas>
     </div>`).join('');
+
+  // Sparkline chart defaults
+  const sparkOpts = (color, type) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    scales: { x: { display: false }, y: { display: false } },
+    elements: type === 'line'
+      ? { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 1.5, fill: true } }
+      : {}
+  });
+
+  tiles.forEach((t, i) => {
+    const canvas = document.getElementById('sc-' + i);
+    if (!canvas || !t.series?.length) return;
+    const hexAlpha = t.type === 'bar' ? '99' : '22';
+    const chart = new Chart(canvas, {
+      type: t.type,
+      data: {
+        labels: days,
+        datasets: [{
+          data: t.series,
+          borderColor: t.color,
+          backgroundColor: t.color + hexAlpha,
+          fill: t.type === 'line',
+          borderWidth: t.type === 'bar' ? 0 : 1.5,
+          barPercentage: 0.75,
+          categoryPercentage: 0.9,
+          pointRadius: 0,
+        }]
+      },
+      options: sparkOpts(t.color, t.type)
+    });
+    stileCharts.push(chart);
+  });
+
+  // Kachel die zum aktuellen chartMode passt als aktiv markieren
+  document.querySelectorAll('.stile').forEach(el => {
+    el.classList.toggle('chart-active', el.dataset.mode === chartMode);
+  });
 }
 
 async function loadHistorical(startDate, endDate) {
@@ -1492,20 +1680,49 @@ $('analysis-load-btn').addEventListener('click', () => {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 $('load-btn').addEventListener('click', () => loadWeather(loadedPastDays));
-$('empty-btn').addEventListener('click', () => loadWeather(5));
-loadWeather(5);
+$('empty-btn').addEventListener('click', () => loadWeather(0, { start: today, end: addDays(today, 4) }));
+loadWeather(0, { start: today, end: addDays(today, 4) });
 
-// Service Worker registrieren + Auto-Reload bei neuer Version
+// Service Worker registrieren + Update-Banner
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').then(reg => {
-    // Prüft beim Laden ob es ein Update gibt
-    reg.update();
-  }).catch(() => {});
+  const banner   = $('update-banner');
+  const reloadBtn = $('update-reload-btn');
+  const dismissBtn = $('update-dismiss-btn');
+  let newWorker = null;
 
-  // Wenn ein neuer SW die Kontrolle übernimmt → Seite neu laden
+  function showBanner(sw) {
+    newWorker = sw;
+    banner.classList.add('visible');
+  }
+
+  reloadBtn.addEventListener('click', () => {
+    if (newWorker) newWorker.postMessage({ type: 'SKIP_WAITING' });
+  });
+  dismissBtn.addEventListener('click', () => {
+    banner.classList.remove('visible');
+  });
+
+  // Wenn neuer SW die Kontrolle übernimmt → Seite neu laden
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     window.location.reload();
   });
+
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    reg.update();
+
+    // Bereits ein wartender SW beim Laden?
+    if (reg.waiting) { showBanner(reg.waiting); return; }
+
+    // Neuer SW wird gerade installiert
+    reg.addEventListener('updatefound', () => {
+      const sw = reg.installing;
+      sw.addEventListener('statechange', () => {
+        if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+          showBanner(sw);
+        }
+      });
+    });
+  }).catch(() => {});
 }
 </script>
 </body>
