@@ -11,6 +11,7 @@
   <link rel="manifest" href="./manifest.json"/>
   <link rel="apple-touch-icon" href="./icon.svg"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -452,6 +453,36 @@
     }
     #analysis-load-btn:hover { background: rgba(250,204,21,.2); }
     #analysis-load-btn:disabled { opacity: .5; cursor: wait; }
+    .reset-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 9px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color .2s, color .2s;
+      white-space: nowrap;
+    }
+    .reset-btn:hover { border-color: #ef4444; color: #ef4444; }
+    #export-bar {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    .export-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    .export-btn:hover { border-color: var(--teal); color: var(--teal); }
+    .export-btn:disabled { opacity: .4; cursor: default; }
     #analysis-info {
       font-size: 11px;
       color: var(--muted);
@@ -677,7 +708,12 @@
         <input type="date" id="analysis-to" class="analysis-date"/>
         <button id="analysis-load-btn">↺ Analysieren</button>
         <span id="analysis-loading">⏳ Lädt…</span>
+        <button class="reset-btn" id="analysis-reset-btn" title="Analyse zurücksetzen">✕</button>
       </div>
+    </div>
+    <div id="export-bar">
+      <button class="export-btn" id="export-csv-btn" disabled>📥 CSV</button>
+      <button class="export-btn" id="export-xlsx-btn" disabled>📥 Excel</button>
     </div>
     <div id="analysis-info"></div>
     <div id="summary-tiles"></div>
@@ -694,6 +730,7 @@
         <button id="heute-btn" title="Letzte & nächste 12 Stunden">⏱ Heute ±12h</button>
         <button class="preset-btn active" data-days="5">5 T</button>
         <button class="preset-btn" data-days="10">10 T</button>
+        <button class="reset-btn" id="cal-reset-btn" title="Zeitraum zurücksetzen">✕</button>
       </div>
     </div>
     <div id="cal-strip"></div>
@@ -1549,6 +1586,11 @@ function renderSummary(srcData, startDate, endDate) {
   stileCharts.forEach(c => { try { c.destroy(); } catch {} });
   stileCharts = [];
 
+  // Datenquelle für Export merken + Export-Buttons aktivieren
+  window._lastAnalysisData = srcData;
+  $('export-csv-btn').disabled  = false;
+  $('export-xlsx-btn').disabled = false;
+
   const s = calcSummary(srcData, startDate, endDate);
   if (!s) { $('summary-tiles').innerHTML = '<span style="color:var(--muted);font-size:12px">Keine Daten für diesen Zeitraum.</span>'; return; }
 
@@ -1689,6 +1731,86 @@ $('analysis-load-btn').addEventListener('click', () => {
   const to   = $('analysis-to').value;
   if (!from || !to) return;
   triggerAnalysis(from, to);
+});
+
+// ── Analyse Reset ──────────────────────────────────────────────────────────────
+$('analysis-reset-btn').addEventListener('click', () => {
+  $('analysis-from').value = '';
+  $('analysis-to').value   = '';
+  $('analysis-info').style.display = 'none';
+  $('analysis-info').textContent = '';
+  $('summary-tiles').innerHTML = '';
+  $('export-csv-btn').disabled  = true;
+  $('export-xlsx-btn').disabled = true;
+  // stileCharts bereinigen
+  if (window.stileCharts) {
+    window.stileCharts.forEach(c => c?.destroy());
+    window.stileCharts = [];
+  }
+});
+
+// ── Kalender-Filter Reset ──────────────────────────────────────────────────────
+$('cal-reset-btn').addEventListener('click', () => {
+  if (!data) return;
+  // Zurück auf 5T-Preset (Standard)
+  rng = { start: today, end: addDays(today, 4), sel: false };
+  document.querySelectorAll('.preset-btn').forEach(b =>
+    b.classList.toggle('active', parseInt(b.dataset.days) === 5));
+  $('heute-btn').classList.remove('active');
+  renderCalendar();
+  renderChart();
+  triggerAnalysis(rng.start, rng.end);
+});
+
+// ── Export-Hilfsfunktionen ─────────────────────────────────────────────────────
+// Liefert rohe Tageszeilen für den aktuellen Analysezeitraum
+function getAnalysisRows() {
+  const from = $('analysis-from').value;
+  const to   = $('analysis-to').value;
+  if (!from || !to || !data) return null;
+  // Welche Datenquelle? Analyse verwendet entweder Forecast-Cache oder wird
+  // nach fetchem in renderSummary gespeichert. Wir greifen auf window._lastAnalysisData.
+  const src = window._lastAnalysisData;
+  if (!src) return null;
+  const rows = [['Datum','T-Max (°C)','T-Min (°C)','Niederschlag (mm)','Wind max (km/h)','ET₀ (mm)']];
+  src.daily.time.forEach((d, i) => {
+    if (d < from || d > to) return;
+    rows.push([
+      fmtDate(d),
+      src.daily.temperature_2m_max?.[i]          ?? '',
+      src.daily.temperature_2m_min?.[i]          ?? '',
+      src.daily.precipitation_sum?.[i]           ?? '',
+      src.daily.windspeed_10m_max?.[i]           ?? '',
+      src.daily.et0_fao_evapotranspiration?.[i]  ?? ''
+    ]);
+  });
+  return rows.length > 1 ? rows : null;
+}
+
+$('export-csv-btn').addEventListener('click', () => {
+  const rows = getAnalysisRows();
+  if (!rows) return;
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const from = $('analysis-from').value;
+  const to   = $('analysis-to').value;
+  a.download = `wetteranalyse_${from}_${to}.csv`;
+  a.click();
+});
+
+$('export-xlsx-btn').addEventListener('click', () => {
+  const rows = getAnalysisRows();
+  if (!rows || typeof XLSX === 'undefined') return;
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  // Spaltenbreiten
+  ws['!cols'] = [10,12,12,18,16,10].map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Wetteranalyse');
+  const from = $('analysis-from').value;
+  const to   = $('analysis-to').value;
+  XLSX.writeFile(wb, `wetteranalyse_${from}_${to}.xlsx`);
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
