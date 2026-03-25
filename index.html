@@ -413,7 +413,7 @@
       margin-bottom: 12px;
     }
     #analysis-title {
-      font-size: 11px;
+      font-size: 17px;
       font-weight: 700;
       color: var(--yellow);
       text-transform: uppercase;
@@ -469,7 +469,7 @@
       display: flex;
       gap: 6px;
       flex-wrap: wrap;
-      justify-content: flex-end;
+      margin-bottom: 8px;
     }
     .export-btn {
       background: transparent;
@@ -700,7 +700,10 @@
   <!-- Zeitraum-Analyse -->
   <div id="analysis-panel">
     <div id="analysis-header">
-      <div id="analysis-title">📊 Analyse<span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px">Zeitraum</span></div>
+      <div>
+        <div id="analysis-title">📊 Analyse</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Zeitraum</div>
+      </div>
       <div id="analysis-controls">
         <span>Von</span>
         <input type="date" id="analysis-from" class="analysis-date"/>
@@ -711,6 +714,10 @@
         <button class="reset-btn" id="analysis-reset-btn" title="Analyse zurücksetzen">✕</button>
       </div>
     </div>
+    <div id="export-bar">
+      <button class="export-btn" id="export-csv-btn" disabled>📥 CSV</button>
+      <button class="export-btn" id="export-xlsx-btn" disabled>📥 Excel</button>
+    </div>
     <div id="analysis-info"></div>
     <div id="summary-tiles"></div>
   </div>
@@ -719,21 +726,15 @@
   <div class="panel">
     <div id="cal-head">
       <div>
-        <div class="panel-title" style="margin-bottom:2px">📅 Prognose</div>
-        <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Zeitraum</div>
+        <div class="panel-title" style="font-size:17px;margin-bottom:2px">📅 Prognose</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:2px">Zeitraum</div>
         <div id="cal-range"></div>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-        <div class="cal-btns">
-          <button id="heute-btn" title="Letzte & nächste 12 Stunden">⏱ Heute ±12h</button>
-          <button class="preset-btn active" data-days="5">5 T</button>
-          <button class="preset-btn" data-days="10">10 T</button>
-          <button class="reset-btn" id="cal-reset-btn" title="Zeitraum zurücksetzen">✕</button>
-        </div>
-        <div id="export-bar">
-          <button class="export-btn" id="export-csv-btn" disabled>📥 CSV</button>
-          <button class="export-btn" id="export-xlsx-btn" disabled>📥 Excel</button>
-        </div>
+      <div class="cal-btns">
+        <button id="heute-btn" title="Letzte & nächste 12 Stunden">⏱ Heute ±12h</button>
+        <button class="preset-btn active" data-days="5">5 T</button>
+        <button class="preset-btn" data-days="10">10 T</button>
+        <button class="reset-btn" id="cal-reset-btn" title="Zeitraum zurücksetzen">✕</button>
       </div>
     </div>
     <div id="cal-strip"></div>
