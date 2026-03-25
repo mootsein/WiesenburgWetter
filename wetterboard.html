@@ -1722,14 +1722,29 @@ function triggerAnalysis(startDate, endDate) {
   if (!startDate || !endDate || startDate > endDate) return;
   $('analysis-from').value = startDate;
   $('analysis-to').value   = endDate;
-  // Innerhalb geladener Forecast-Daten → direkt berechnen (kein API-Call nötig)
-  if (data && startDate >= data.daily.time[0] && endDate <= data.daily.time[data.daily.time.length-1]) {
+
+  const lastForecast = data ? data.daily.time[data.daily.time.length - 1] : null;
+
+  // Fall 1: vollständig im geladenen Forecast-Cache
+  if (data && startDate >= data.daily.time[0] && endDate <= lastForecast) {
     renderSummary(data, startDate, endDate);
-  } else if (endDate >= today && data && startDate >= data.daily.time[0]) {
-    // Zeitraum endet heute oder in der Zukunft, Start liegt aber im Forecast → Cache reicht
-    renderSummary(data, startDate, endDate);
+
+  // Fall 2: Start liegt im Forecast, Ende geht darüber hinaus
+  // → nur verfügbare Tage anzeigen, Hinweis ausgeben
+  } else if (data && startDate >= data.daily.time[0] && startDate <= lastForecast && endDate > lastForecast) {
+    $('analysis-info').textContent =
+      `Prognose verfügbar bis ${fmtDate(lastForecast)} — Analyse zeigt nur diesen Zeitraum.`;
+    $('analysis-info').style.display = 'block';
+    renderSummary(data, startDate, lastForecast);
+
+  // Fall 3: Zeitraum liegt vollständig in der Zukunft jenseits des Forecasts
+  } else if (data && startDate > lastForecast) {
+    $('analysis-info').textContent =
+      `Keine Daten verfügbar — Prognose endet am ${fmtDate(lastForecast)}.`;
+    $('analysis-info').style.display = 'block';
+
+  // Fall 4: Historische Daten nötig → Archive API (kapped auf gestern-2)
   } else {
-    // Historische Daten nötig → Archive API (kapped automatisch auf max. gestern-2)
     loadHistorical(startDate, endDate);
   }
 }
